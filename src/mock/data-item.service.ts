@@ -134,17 +134,20 @@ export class DataItemService {
   relation() {
     return [
       {
-        item1: "SYDCAT05_Policy_PreQA_Front-end Daily",
-        item2: "SYDCAT06_UM_PreQA_Authentication"
+        source: "SYDCAT05_Policy_PreQA_Front-end Daily",
+        targets: ["SYDCAT06_UM_PreQA_Authentication"]
       },
       {
-        item1: "SYDCAT01_Pivotal_PreQA_Front-end Daily",
-        item2: "SYDCAT06_UM_PreQA_Authentication"
-      },
-      {
-        item1: "SYDCAT01_Pivotal_PreQA_Front-end Daily",
-        item2: "SYDCAT06_UM_PreQA_Front-end"
+        source: "SYDCAT01_Pivotal_PreQA_Front-end Daily",
+        targets: [
+          "SYDCAT06_UM_PreQA_Authentication",
+          "SYDCAT06_UM_PreQA_Front-end"
+        ]
       }
+      // {
+      //   source: "SYDCAT01_Pivotal_PreQA_Front-end Daily",
+      //   targets: "SYDCAT06_UM_PreQA_Front-end"
+      // }
     ];
   }
 

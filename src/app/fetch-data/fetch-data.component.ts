@@ -62,11 +62,14 @@ export class FetchDataComponent implements AfterViewInit {
     this.model = new mxGraphModel();
     this.graph = new mxGraph(this.graphContainer.nativeElement, this.model);
     this.graph.convertValueToString = function(cell) {
-      var item = cell.value as DataItem;
-      return item.name;
+      if (cell.value) {
+        var item = cell.value as DataItem;
+        return item ? item.name : `${cell.value}`;
+      }
+      return "";
     };
 
-    var grandLayout = new mxStackLayout(this.graph, false, 30, 8, 8, true);
+    var grandLayout = new mxStackLayout(this.graph, true, 30, 8, 8, true);
 
     try {
       const parent = this.graph.getDefaultParent();
@@ -76,7 +79,7 @@ export class FetchDataComponent implements AfterViewInit {
         this.addVertix(item, parent, new mxGeometry(0, 0, 100, 60))
       );
       this.populateRelation();
-      //this.graph.setDropEnabled(true);
+      this.graph.setDropEnabled(true);
       this.reArrange(parent, grandLayout);
     } finally {
       this.graph.getModel().endUpdate();
@@ -87,8 +90,8 @@ export class FetchDataComponent implements AfterViewInit {
     if (vertix.value === undefined) {
       return "";
     } else if (vertix.parent.value === undefined) {
-      return vertix.value;
-    } else return `${this.getItemKey(vertix.parent)}_${vertix.value}`;
+      return vertix.value.name;
+    } else return `${this.getItemKey(vertix.parent)}_${vertix.value.name}`;
   }
 
   private addVertix(
@@ -104,7 +107,7 @@ export class FetchDataComponent implements AfterViewInit {
       geo.y,
       geo.width,
       geo.height,
-      "html=1;rounded=1;fontStyle=1;align=center;verticalAlign=top;"
+      "rounded=1;fontStyle=1;align=center;verticalAlign=top;whiteSpace=wrap;"
     );
     this.verticles[this.getItemKey(cell)] = cell;
     if (dataItem.children) {
@@ -112,25 +115,33 @@ export class FetchDataComponent implements AfterViewInit {
         this.addVertix(dataItem.children[i], cell, geo);
       }
     } else {
-      cell.style = "html=1;rounded=1;fontStyle=1;align=center;";
+      cell.style = "html=1;rounded=1;fontStyle=1;align=center;whiteSpace=wrap;";
     }
   }
 
   private populateRelation(): void {
+    debugger;
     this.dataService.relation().forEach(rel => {
-      this.graph.insertEdge(
-        this.graph.getDefaultParent(),
-        null,
-        null,
-        this.verticles[rel.item1],
-        this.verticles[rel.item2]
-      );
+      if (this.verticles[rel.source]) {
+        rel.targets.forEach(target => {
+          if (this.verticles[target]) {
+            this.graph.insertEdge(
+              this.graph.getDefaultParent(),
+              null,
+              null,
+              this.verticles[rel.source],
+              this.verticles[target]
+            );
+          }
+        });
+      }
     });
   }
   private reArrange(
     parentCell: mxgraph.mxCell,
     layout: mxgraph.mxGraphLayout
   ): void {
+    var isHorizontal: boolean = true;
     if (parentCell.children) {
       const stackLayout = new mxStackLayout(this.graph, true, 20, 8, 30, false);
       stackLayout.fill = true;
@@ -143,15 +154,24 @@ export class FetchDataComponent implements AfterViewInit {
           this.reArrange(cell, stackLayout);
         }
       });
+      if (
+        parentCell.value &&
+        parentCell.value.type == "ENV" &&
+        (layout as mxgraph.mxStackLayout) !== undefined
+      ) {
+        (layout as mxgraph.mxStackLayout).horizontal = false;
+        isHorizontal = false;
+      }
       layout.execute(parentCell);
-      this.resizeVertex(parentCell);
+      this.resizeVertex(parentCell, isHorizontal);
     }
   }
 
-  private resizeVertex(cell: mxgraph.mxCell): void {
+  private resizeVertex(cell: mxgraph.mxCell, isHorizontal: boolean): void {
     if (cell.geometry == null) {
       return;
     }
+
     var childGeo = cell.children
       .map(c => {
         return c.geometry;
@@ -160,12 +180,12 @@ export class FetchDataComponent implements AfterViewInit {
         return new mxGeometry(
           sumGeo.x,
           sumGeo.y,
-          sumGeo.width + 20 + currentGeo.width,
-          sumGeo.height
+          isHorizontal ? sumGeo.width + 20 + currentGeo.width : sumGeo.width,
+          isHorizontal ? sumGeo.height : sumGeo.height + 20 + currentGeo.height
         );
       });
     var g = cell.geometry.clone();
-    g.width = childGeo.width + 20;
+    g.width = childGeo.width + 50;
     g.height = childGeo.height + 50;
     this.graph.cellsResized([cell], [g]);
   }
