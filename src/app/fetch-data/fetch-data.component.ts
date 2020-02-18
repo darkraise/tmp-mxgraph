@@ -16,7 +16,14 @@ const {
   mxHierarchicalLayout,
   mxFastOrganicLayout,
   mxCircleLayout,
-  mxStackLayout
+  mxStackLayout,
+  mxSwimlaneLayout,
+  mxCompositeLayout,
+  mxPartitionLayout,
+  mxConstants,
+  mxGeometry,
+  mxCell,
+  mxRectangle
 } = mxgraphFactory({
   mxLoadResources: false,
   mxLoadStylesheets: false
@@ -36,7 +43,8 @@ export class FetchDataComponent implements AfterViewInit {
 
   private model: mxgraph.mxGraphModel;
   private graph: mxgraph.mxGraph;
-  private layout: mxgraph.mxGraphLayout;
+  private verticles: { [key: string]: mxgraph.mxCell } = {};
+
   public items: DataItem[];
 
   constructor(
@@ -53,79 +61,123 @@ export class FetchDataComponent implements AfterViewInit {
   ngAfterViewInit(): void {
     this.model = new mxGraphModel();
     this.graph = new mxGraph(this.graphContainer.nativeElement, this.model);
+    this.graph.convertValueToString = function(cell) {
+      var item = cell.value as DataItem;
+      return item.name;
+    };
 
-    this.graph.collapseToPreferredSize = true;
-    this.graph.constrainChildren = true;
-    this.graph.cellsSelectable = true;
-    this.graph.extendParentsOnAdd = true;
-    this.graph.extendParents = true;
-    this.graph.setDropEnabled(true);
+    var grandLayout = new mxStackLayout(this.graph, false, 30, 8, 8, true);
 
-    //this.graph.setResizeContainer(true);
-    //this.graph.setEnabled(false);
-    //var style = this.graph.getStylesheet().getDefaultVertexStyle();
-
-    //this.layout = new mxCircleLayout(this.graph);
-    this.layout = new mxStackLayout(this.graph, true, 50, 30, 30, true);
     try {
       const parent = this.graph.getDefaultParent();
-      this.model.beginUpdate();
+      this.graph.getModel().beginUpdate();
 
       this.items.forEach(item =>
-        this.addVertix(item, parent, { x: 0, y: 0, width: 100, height: 60 })
+        this.addVertix(item, parent, new mxGeometry(0, 0, 100, 60))
       );
-      this.reArrange();
+      this.populateRelation();
+      //this.graph.setDropEnabled(true);
+      this.reArrange(parent, grandLayout);
     } finally {
-      this.model.endUpdate();
+      this.graph.getModel().endUpdate();
     }
+  }
+
+  private getItemKey(vertix: mxgraph.mxCell): string {
+    if (vertix.value === undefined) {
+      return "";
+    } else if (vertix.parent.value === undefined) {
+      return vertix.value;
+    } else return `${this.getItemKey(vertix.parent)}_${vertix.value}`;
   }
 
   private addVertix(
     dataItem: DataItem,
-    parent: any,
-    geo: GeoData,
-    isRelative?: boolean
+    parent: mxgraph.mxCell,
+    geo: mxgraph.mxGeometry
   ): void {
-    var vertix = this.graph.insertVertex(
+    var cell = this.graph.insertVertex(
       parent,
       null,
-      dataItem.name,
+      dataItem,
       geo.x,
       geo.y,
       geo.width,
       geo.height,
-      "rounded=1;",
-      isRelative
+      "html=1;rounded=1;fontStyle=1;align=center;verticalAlign=top;"
     );
-
+    this.verticles[this.getItemKey(cell)] = cell;
     if (dataItem.children) {
       for (var i = 0; i < dataItem.children.length; i++) {
-        this.addVertix(dataItem.children[i], vertix, geo, true);
+        this.addVertix(dataItem.children[i], cell, geo);
       }
+    } else {
+      cell.style = "html=1;rounded=1;fontStyle=1;align=center;";
     }
-    //this.graph.updateCellSize(vertix, false);
-    //this.graph.extendParent(parent);
   }
 
-  private reArrange(): void {
-    this.graph.getDefaultParent().children.forEach(cell => {
-      if (cell.isVertex()) {
-        this.layout.execute(cell);
-      }
+  private populateRelation(): void {
+    this.dataService.relation().forEach(rel => {
+      this.graph.insertEdge(
+        this.graph.getDefaultParent(),
+        null,
+        null,
+        this.verticles[rel.item1],
+        this.verticles[rel.item2]
+      );
     });
-    this.layout.execute(this.graph.getDefaultParent());
+  }
+  private reArrange(
+    parentCell: mxgraph.mxCell,
+    layout: mxgraph.mxGraphLayout
+  ): void {
+    if (parentCell.children) {
+      const stackLayout = new mxStackLayout(this.graph, true, 20, 8, 30, false);
+      stackLayout.fill = true;
+      stackLayout.resizeParent = true;
+      stackLayout.resizeParentMax = true;
+
+      //stackLayout.
+      parentCell.children.forEach(cell => {
+        if (cell.isVertex() && cell.children) {
+          this.reArrange(cell, stackLayout);
+        }
+      });
+      layout.execute(parentCell);
+      this.resizeVertex(parentCell);
+    }
+  }
+
+  private resizeVertex(cell: mxgraph.mxCell): void {
+    if (cell.geometry == null) {
+      return;
+    }
+    var childGeo = cell.children
+      .map(c => {
+        return c.geometry;
+      })
+      .reduce((sumGeo, currentGeo) => {
+        return new mxGeometry(
+          sumGeo.x,
+          sumGeo.y,
+          sumGeo.width + 20 + currentGeo.width,
+          sumGeo.height
+        );
+      });
+    var g = cell.geometry.clone();
+    g.width = childGeo.width + 20;
+    g.height = childGeo.height + 50;
+    this.graph.cellsResized([cell], [g]);
   }
 }
 
-interface DataItem {
+export interface DataItem {
   name: string;
   type: string;
   children?: DataItem[];
 }
 
-interface GeoData {
-  x: number;
-  y: number;
-  width: number;
-  height: number;
+interface Relation {
+  item1: string;
+  item2: string;
 }
