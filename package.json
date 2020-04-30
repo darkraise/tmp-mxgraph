@@ -26,7 +26,7 @@
     "bootstrap": "^4.4.1",
     "core-js": "^3.6.4",
     "cytoscape": "^3.14.0",
-    "jquery": "3.4.1",
+    "jquery": "3.5.0",
     "mxgraph": "^4.1.0",
     "mxgraph-factory": "^4.1.0",
     "oidc-client": "^1.10.1",
